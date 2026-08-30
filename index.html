@@ -119,6 +119,33 @@
   .modal-card button:focus-visible, .ctrl-btn:focus-visible{ outline:3px solid var(--neon-yellow); outline-offset:3px; }
   .welcome-back{ font-size:13px; color:var(--neon-yellow); margin-bottom:6px; display:none; }
 
+  /* ---------- LEADERBOARD ---------- */
+  .leaderboard{
+    text-align:left; background:#0E1226; border:1.5px solid var(--line);
+    border-radius:12px; padding:14px 16px; margin-bottom:18px;
+  }
+  .leaderboard-head{
+    display:flex; align-items:center; justify-content:space-between;
+    font-family:'Orbitron', sans-serif; font-size:11px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--neon-cyan); margin-bottom:10px;
+  }
+  .leaderboard-head span.tag{
+    font-family:'Space Grotesk', sans-serif; text-transform:none; letter-spacing:0; font-size:10.5px; opacity:.5;
+  }
+  .lb-row{
+    display:flex; align-items:center; gap:10px; padding:6px 0;
+    font-size:13.5px; border-top:1px solid rgba(255,255,255,0.06);
+  }
+  .lb-row:first-child{ border-top:none; }
+  .lb-rank{
+    font-family:'Orbitron', sans-serif; font-size:12px; width:20px; color:rgba(234,246,255,0.5);
+  }
+  .lb-row.top1 .lb-rank{ color:var(--neon-yellow); }
+  .lb-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lb-score{ font-family:'Orbitron', sans-serif; color:var(--neon-yellow); font-size:13px; }
+  .lb-empty{ font-size:12.5px; opacity:.5; padding:4px 0; }
+  .lb-you .lb-name{ color:var(--neon-pink); font-weight:600; }
+
   /* ---------- GAME OVER ---------- */
   .gameover .modal-card h1{ color:var(--neon-pink); text-shadow:0 0 14px rgba(255,46,146,0.55); }
   .final-score{ font-family:'Orbitron', sans-serif; font-size:44px; color:var(--neon-yellow); margin:10px 0 4px; }
@@ -167,6 +194,10 @@
     <div class="welcome-back" id="welcomeBack"></div>
     <h1>TURBO DASH</h1>
     <p id="modalSub">Enter your name, driver — dodge traffic and rack up points.</p>
+    <div class="leaderboard">
+      <div class="leaderboard-head"><span>🏆 Top scores</span><span class="tag">shared on this link</span></div>
+      <div id="lbListStart"><div class="lb-empty">Loading…</div></div>
+    </div>
     <input type="text" id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off">
     <button id="startBtn">Start engine</button>
   </div>
@@ -178,6 +209,10 @@
     <h1>CRASHED</h1>
     <div class="final-score" id="finalScore">0</div>
     <div class="best-score" id="bestScoreLine">Best: 0</div>
+    <div class="leaderboard">
+      <div class="leaderboard-head"><span>🏆 Top scores</span><span class="tag">shared on this link</span></div>
+      <div id="lbListOver"><div class="lb-empty">Loading…</div></div>
+    </div>
     <button id="retryBtn">Race again</button>
   </div>
 </div>
@@ -197,11 +232,22 @@
   const roadWidth = 320;
   let roadLeft, roadRight;
 
-  // ---------- Player name storage ----------
+  // ---------- Player name + personal best (private to this browser) ----------
   const NAME_KEY = 'turboDashName';
   const BEST_KEY = 'turboDashBest';
-  let playerName = localStorage.getItem(NAME_KEY) || '';
-  let bestScore = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
+  let playerName = '';
+  let bestScore = 0;
+
+  async function storageGet(key, shared){
+    try{
+      const res = await window.storage.get(key, !!shared);
+      return res ? res.value : null;
+    }catch(e){ return null; }
+  }
+  async function storageSet(key, value, shared){
+    try{ await window.storage.set(key, value, !!shared); return true; }
+    catch(e){ return false; }
+  }
 
   const nameModal = document.getElementById('nameModal');
   const welcomeBack = document.getElementById('welcomeBack');
@@ -212,19 +258,71 @@
   const hudScore = document.getElementById('hudScore');
   const hudBest = document.getElementById('hudBest');
 
-  hudBest.textContent = bestScore;
+  // ---------- Shared leaderboard ----------
+  const LEADERBOARD_KEY = 'leaderboard';
 
-  if(playerName){
-    welcomeBack.style.display = 'block';
-    welcomeBack.textContent = 'Welcome back, ' + playerName + '!';
-    modalSub.textContent = 'Ready for another run?';
-    nameInput.value = playerName;
+  async function loadLeaderboard(){
+    const raw = await storageGet(LEADERBOARD_KEY, true);
+    if(!raw) return [];
+    try{ const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }
+    catch(e){ return []; }
   }
 
-  startBtn.addEventListener('click', () => {
+  async function submitScore(name, points){
+    const board = await loadLeaderboard();
+    board.push({ name, score: points, ts: Date.now() });
+    board.sort((a,b) => b.score - a.score);
+    const trimmed = board.slice(0, 10);
+    await storageSet(LEADERBOARD_KEY, JSON.stringify(trimmed), true);
+    return trimmed;
+  }
+
+  function renderLeaderboard(containerEl, board, highlightName){
+    if(!board || board.length === 0){
+      containerEl.innerHTML = '<div class="lb-empty">No runs yet — be the first!</div>';
+      return;
+    }
+    containerEl.innerHTML = board.map((entry, i) => {
+      const isYou = highlightName && entry.name === highlightName;
+      return '<div class="lb-row' + (i===0 ? ' top1':'') + (isYou ? ' lb-you':'') + '">' +
+        '<span class="lb-rank">#' + (i+1) + '</span>' +
+        '<span class="lb-name">' + escapeHtml(entry.name) + '</span>' +
+        '<span class="lb-score">' + entry.score + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function escapeHtml(str){
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  async function refreshStartLeaderboard(){
+    const board = await loadLeaderboard();
+    renderLeaderboard(document.getElementById('lbListStart'), board, playerName);
+  }
+
+  // ---------- Init ----------
+  async function init(){
+    playerName = (await storageGet(NAME_KEY, false)) || '';
+    bestScore = parseInt((await storageGet(BEST_KEY, false)) || '0', 10);
+    hudBest.textContent = bestScore;
+
+    if(playerName){
+      welcomeBack.style.display = 'block';
+      welcomeBack.textContent = 'Welcome back, ' + playerName + '!';
+      modalSub.textContent = 'Ready to defend your spot?';
+      nameInput.value = playerName;
+    }
+    refreshStartLeaderboard();
+  }
+  init();
+
+  startBtn.addEventListener('click', async () => {
     const val = nameInput.value.trim();
     playerName = val || playerName || 'Driver';
-    localStorage.setItem(NAME_KEY, playerName);
+    await storageSet(NAME_KEY, playerName, false);
     hudName.textContent = playerName;
     nameModal.classList.add('hidden');
     startGame();
@@ -270,17 +368,23 @@
     return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
   }
 
-  function endGame(){
+  async function endGame(){
     running = false;
     cancelAnimationFrame(animId);
     if(score > bestScore){
       bestScore = score;
-      localStorage.setItem(BEST_KEY, String(bestScore));
+      storageSet(BEST_KEY, String(bestScore), false);
     }
     document.getElementById('finalScore').textContent = score;
-    document.getElementById('bestScoreLine').textContent = 'Best: ' + bestScore;
+    document.getElementById('bestScoreLine').textContent = 'Your best: ' + bestScore;
     hudBest.textContent = bestScore;
     document.getElementById('overModal').classList.remove('hidden');
+
+    const lbListOver = document.getElementById('lbListOver');
+    lbListOver.innerHTML = '<div class="lb-empty">Submitting your score…</div>';
+    const board = await submitScore(playerName, score);
+    renderLeaderboard(lbListOver, board, playerName);
+    refreshStartLeaderboard();
   }
 
   let lastTime = 0;
