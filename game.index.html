@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Turbo Dash — Dodge &amp; Drive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E1A;
+    --bg2:#12172B;
+    --neon-cyan:#00E5FF;
+    --neon-pink:#FF2E92;
+    --neon-yellow:#FFD23F;
+    --line: rgba(0,229,255,0.25);
+    --panel: rgba(18,23,43,0.9);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none;}
+  html,body{
+    margin:0; height:100%;
+    background:radial-gradient(circle at 50% 0%, var(--bg2), var(--bg) 70%);
+    color:#EAF6FF;
+    font-family:'Space Grotesk', sans-serif;
+    overflow:hidden;
+  }
+  @media (prefers-reduced-motion: reduce){ *{ animation-duration:.001ms !important; } }
+
+  /* ---------- TOP HUD ---------- */
+  .hud{
+    position:fixed; top:0; left:0; right:0; z-index:20;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px;
+    background:linear-gradient(180deg, rgba(11,14,26,0.95), rgba(11,14,26,0));
+  }
+  .hud-title{
+    font-family:'Orbitron', sans-serif; font-weight:900; font-size:15px;
+    letter-spacing:.06em; color:var(--neon-cyan);
+    text-shadow:0 0 10px rgba(0,229,255,0.6);
+  }
+  .hud-stats{ display:flex; gap:16px; font-family:'Orbitron', sans-serif; font-size:13px;}
+  .hud-stats b{ color:var(--neon-yellow); font-size:15px;}
+  .hud-stats .lbl{ opacity:.6; font-size:9px; display:block; letter-spacing:.05em; text-transform:uppercase;}
+
+  /* ---------- GAME AREA ---------- */
+  #gameCanvas{
+    position:fixed; inset:0; display:block; margin:0 auto;
+    background:#151B33;
+  }
+
+  /* ---------- CONTROLS ---------- */
+  .controls{
+    position:fixed; bottom:0; left:0; right:0; z-index:20;
+    display:flex; justify-content:space-between; align-items:flex-end;
+    padding:0 18px 22px;
+    pointer-events:none;
+  }
+  .pad{
+    display:flex; gap:12px; pointer-events:auto;
+  }
+  .pad-label{
+    font-family:'Orbitron', sans-serif; font-size:9px; letter-spacing:.08em; text-transform:uppercase;
+    text-align:center; opacity:.55; margin-bottom:6px;
+  }
+  .pad-col{ display:flex; flex-direction:column; align-items:center; }
+  .ctrl-btn{
+    width:64px; height:64px; border-radius:16px;
+    border:1.5px solid var(--line);
+    background:var(--panel);
+    color:var(--neon-cyan);
+    font-size:26px; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 6px 18px rgba(0,0,0,0.4);
+    transition:transform .08s ease, background .12s ease, box-shadow .12s ease;
+    touch-action:none;
+  }
+  .ctrl-btn:active, .ctrl-btn.pressed{
+    transform:scale(0.9);
+    background:rgba(0,229,255,0.18);
+    box-shadow:0 0 18px rgba(0,229,255,0.55);
+  }
+  #btnDown{ color:var(--neon-pink); }
+  #btnDown.pressed, #btnDown:active{ background:rgba(255,46,146,0.18); box-shadow:0 0 18px rgba(255,46,146,0.55); }
+
+  /* ---------- NAME MODAL ---------- */
+  .modal-layer{
+    position:fixed; inset:0; z-index:100;
+    background:rgba(5,7,15,0.88);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .modal-card{
+    width:100%; max-width:380px;
+    background:var(--bg2);
+    border:1.5px solid var(--line);
+    border-radius:20px;
+    padding:32px 28px;
+    text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal-card h1{
+    font-family:'Orbitron', sans-serif; font-weight:900; font-size:24px;
+    color:var(--neon-cyan); text-shadow:0 0 14px rgba(0,229,255,0.55);
+    margin:0 0 8px; letter-spacing:.02em;
+  }
+  .modal-card p{ font-size:14.5px; color:rgba(234,246,255,0.65); margin:0 0 22px; line-height:1.5;}
+  .modal-card input{
+    width:100%; padding:14px 16px; border-radius:12px; border:1.5px solid var(--line);
+    background:#0E1226; color:#EAF6FF; font-size:16px; font-family:'Space Grotesk', sans-serif;
+    margin-bottom:16px; outline:none;
+  }
+  .modal-card input:focus{ border-color:var(--neon-cyan); box-shadow:0 0 0 3px rgba(0,229,255,0.2); }
+  .modal-card button{
+    width:100%; padding:14px; border-radius:12px; border:none; cursor:pointer;
+    font-family:'Orbitron', sans-serif; font-weight:700; font-size:14px; letter-spacing:.04em;
+    background:linear-gradient(135deg, var(--neon-cyan), #4dc9ff); color:#04121A;
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  .modal-card button:hover{ transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,229,255,0.35); }
+  .modal-card button:focus-visible, .ctrl-btn:focus-visible{ outline:3px solid var(--neon-yellow); outline-offset:3px; }
+  .welcome-back{ font-size:13px; color:var(--neon-yellow); margin-bottom:6px; display:none; }
+
+  /* ---------- GAME OVER ---------- */
+  .gameover .modal-card h1{ color:var(--neon-pink); text-shadow:0 0 14px rgba(255,46,146,0.55); }
+  .final-score{ font-family:'Orbitron', sans-serif; font-size:44px; color:var(--neon-yellow); margin:10px 0 4px; }
+  .best-score{ font-size:12.5px; opacity:.6; margin-bottom:22px; }
+
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="hud">
+  <div class="hud-title">TURBO DASH</div>
+  <div class="hud-stats">
+    <div><span class="lbl">Driver</span><b id="hudName">—</b></div>
+    <div><span class="lbl">Score</span><b id="hudScore">0</b></div>
+    <div><span class="lbl">Best</span><b id="hudBest">0</b></div>
+  </div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="controls">
+  <div class="pad">
+    <div class="pad-col">
+      <span class="pad-label">Steer</span>
+      <div style="display:flex; gap:10px;">
+        <div class="ctrl-btn" id="btnLeft">&#8592;</div>
+        <div class="ctrl-btn" id="btnRight">&#8594;</div>
+      </div>
+    </div>
+  </div>
+  <div class="pad">
+    <div class="pad-col">
+      <span class="pad-label">Speed</span>
+      <div style="display:flex; gap:10px;">
+        <div class="ctrl-btn" id="btnUp">&#8593;</div>
+        <div class="ctrl-btn" id="btnDown">&#8595;</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- NAME MODAL -->
+<div class="modal-layer" id="nameModal">
+  <div class="modal-card">
+    <div class="welcome-back" id="welcomeBack"></div>
+    <h1>TURBO DASH</h1>
+    <p id="modalSub">Enter your name, driver — dodge traffic and rack up points.</p>
+    <input type="text" id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off">
+    <button id="startBtn">Start engine</button>
+  </div>
+</div>
+
+<!-- GAME OVER MODAL -->
+<div class="modal-layer gameover hidden" id="overModal">
+  <div class="modal-card">
+    <h1>CRASHED</h1>
+    <div class="final-score" id="finalScore">0</div>
+    <div class="best-score" id="bestScoreLine">Best: 0</div>
+    <button id="retryBtn">Race again</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H;
+  function resize(){
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    roadLeft = W/2 - roadWidth/2;
+    roadRight = W/2 + roadWidth/2;
+  }
+
+  const roadWidth = 320;
+  let roadLeft, roadRight;
+
+  // ---------- Player name storage ----------
+  const NAME_KEY = 'turboDashName';
+  const BEST_KEY = 'turboDashBest';
+  let playerName = localStorage.getItem(NAME_KEY) || '';
+  let bestScore = parseInt(localStorage.getItem(BEST_KEY) || '0', 10);
+
+  const nameModal = document.getElementById('nameModal');
+  const welcomeBack = document.getElementById('welcomeBack');
+  const modalSub = document.getElementById('modalSub');
+  const nameInput = document.getElementById('nameInput');
+  const startBtn = document.getElementById('startBtn');
+  const hudName = document.getElementById('hudName');
+  const hudScore = document.getElementById('hudScore');
+  const hudBest = document.getElementById('hudBest');
+
+  hudBest.textContent = bestScore;
+
+  if(playerName){
+    welcomeBack.style.display = 'block';
+    welcomeBack.textContent = 'Welcome back, ' + playerName + '!';
+    modalSub.textContent = 'Ready for another run?';
+    nameInput.value = playerName;
+  }
+
+  startBtn.addEventListener('click', () => {
+    const val = nameInput.value.trim();
+    playerName = val || playerName || 'Driver';
+    localStorage.setItem(NAME_KEY, playerName);
+    hudName.textContent = playerName;
+    nameModal.classList.add('hidden');
+    startGame();
+  });
+  nameInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') startBtn.click(); });
+
+  // ---------- Game state ----------
+  let car, obstacles, score, speed, running, lastSpawn, roadOffset, animId;
+  const CAR_W = 46, CAR_H = 74;
+  const baseSpeed = 4.2;
+  const minSpeed = 2.2, maxSpeed = 9.5;
+  const steerRate = 6.5;
+
+  const pressed = { left:false, right:false, up:false, down:false };
+
+  function resetGame(){
+    car = { x: W/2, y: 0, w: CAR_W, h: CAR_H };
+    obstacles = [];
+    score = 0;
+    speed = baseSpeed;
+    lastSpawn = 0;
+    roadOffset = 0;
+    running = true;
+    hudScore.textContent = '0';
+  }
+
+  function startGame(){
+    resize();
+    resetGame();
+    car.y = H - 130;
+    if(animId) cancelAnimationFrame(animId);
+    lastTime = performance.now();
+    loop(lastTime);
+  }
+
+  function spawnObstacle(){
+    const w = 46 + Math.random()*20;
+    const x = roadLeft + 20 + Math.random() * (roadWidth - 40 - w);
+    obstacles.push({ x, y: -80, w, h: 60 + Math.random()*20, passed:false, hue: Math.random() > 0.5 ? 'pink':'yellow' });
+  }
+
+  function rectsOverlap(a,b){
+    return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  }
+
+  function endGame(){
+    running = false;
+    cancelAnimationFrame(animId);
+    if(score > bestScore){
+      bestScore = score;
+      localStorage.setItem(BEST_KEY, String(bestScore));
+    }
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('bestScoreLine').textContent = 'Best: ' + bestScore;
+    hudBest.textContent = bestScore;
+    document.getElementById('overModal').classList.remove('hidden');
+  }
+
+  let lastTime = 0;
+  function loop(t){
+    if(!running) return;
+    const dt = Math.min(t - lastTime, 40) / 16.67;
+    lastTime = t;
+
+    // steering
+    if(pressed.left) car.x -= steerRate * dt;
+    if(pressed.right) car.x += steerRate * dt;
+    const carLeftBound = roadLeft + 14 + car.w/2;
+    const carRightBound = roadRight - 14 - car.w/2;
+    car.x = Math.max(carLeftBound, Math.min(carRightBound, car.x));
+
+    // throttle
+    if(pressed.up) speed = Math.min(maxSpeed, speed + 0.08*dt);
+    if(pressed.down) speed = Math.max(minSpeed, speed - 0.12*dt);
+
+    roadOffset = (roadOffset + speed*dt) % 40;
+
+    // spawn (interval measured in frames-at-60fps; higher speed = slightly tighter gaps, still reasonable)
+    lastSpawn += dt;
+    const spawnGap = Math.max(50, 105 - speed*6);
+    if(lastSpawn > spawnGap){
+      spawnObstacle();
+      lastSpawn = 0;
+    }
+
+    // update obstacles
+    const carBox = { x: car.x - car.w/2, y: car.y - car.h/2, w: car.w, h: car.h };
+    for(let i = obstacles.length-1; i >= 0; i--){
+      const o = obstacles[i];
+      o.y += speed*dt;
+      const oBox = { x:o.x, y:o.y, w:o.w, h:o.h };
+      if(!o.passed && o.y > car.y + car.h/2){
+        o.passed = true;
+        score += 10;
+        hudScore.textContent = score;
+      }
+      if(rectsOverlap(carBox, oBox)){
+        endGame();
+      }
+      if(o.y > H + 100) obstacles.splice(i,1);
+    }
+
+    draw();
+    if(running) animId = requestAnimationFrame(loop);
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // background
+    ctx.fillStyle = '#0B0E1A';
+    ctx.fillRect(0,0,W,H);
+
+    // road
+    ctx.fillStyle = '#1A2038';
+    ctx.fillRect(roadLeft, 0, roadWidth, H);
+    // shoulders glow
+    ctx.strokeStyle = 'rgba(0,229,255,0.5)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(roadLeft,0); ctx.lineTo(roadLeft,H); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(roadRight,0); ctx.lineTo(roadRight,H); ctx.stroke();
+
+    // lane dashes
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([22,18]);
+    ctx.lineDashOffset = -roadOffset;
+    [roadLeft + roadWidth/3, roadLeft + 2*roadWidth/3].forEach(x=>{
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // obstacles
+    obstacles.forEach(o=>{
+      const grad = ctx.createLinearGradient(o.x,o.y,o.x,o.y+o.h);
+      if(o.hue === 'pink'){ grad.addColorStop(0,'#FF2E92'); grad.addColorStop(1,'#a3115c'); }
+      else { grad.addColorStop(0,'#FFD23F'); grad.addColorStop(1,'#b3900c'); }
+      ctx.fillStyle = grad;
+      roundRect(o.x, o.y, o.w, o.h, 8);
+      ctx.fill();
+    });
+
+    // car
+    ctx.save();
+    ctx.translate(car.x, car.y);
+    const grad = ctx.createLinearGradient(0,-car.h/2,0,car.h/2);
+    grad.addColorStop(0,'#4DC9FF'); grad.addColorStop(1,'#0091C2');
+    ctx.fillStyle = grad;
+    roundRectAt(-car.w/2,-car.h/2, car.w, car.h, 10);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(11,14,26,0.6)';
+    roundRectAt(-car.w/2+8,-car.h/2+12, car.w-16, 22, 5); ctx.fill();
+    ctx.restore();
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+  function roundRectAt(x,y,w,h,r){ roundRect(x,y,w,h,r); }
+
+  // ---------- Controls binding ----------
+  function bindHold(el, key){
+    const set = (v) => { pressed[key] = v; el.classList.toggle('pressed', v); };
+    el.addEventListener('pointerdown', (e)=>{ e.preventDefault(); set(true); });
+    el.addEventListener('pointerup', ()=> set(false));
+    el.addEventListener('pointerleave', ()=> set(false));
+    el.addEventListener('pointercancel', ()=> set(false));
+  }
+  bindHold(document.getElementById('btnLeft'), 'left');
+  bindHold(document.getElementById('btnRight'), 'right');
+  bindHold(document.getElementById('btnUp'), 'up');
+  bindHold(document.getElementById('btnDown'), 'down');
+
+  window.addEventListener('keydown', (e)=>{
+    if(e.key === 'ArrowLeft') pressed.left = true;
+    if(e.key === 'ArrowRight') pressed.right = true;
+    if(e.key === 'ArrowUp') pressed.up = true;
+    if(e.key === 'ArrowDown') pressed.down = true;
+  });
+  window.addEventListener('keyup', (e)=>{
+    if(e.key === 'ArrowLeft') pressed.left = false;
+    if(e.key === 'ArrowRight') pressed.right = false;
+    if(e.key === 'ArrowUp') pressed.up = false;
+    if(e.key === 'ArrowDown') pressed.down = false;
+  });
+
+  document.getElementById('retryBtn').addEventListener('click', ()=>{
+    document.getElementById('overModal').classList.add('hidden');
+    startGame();
+  });
+
+  window.addEventListener('resize', ()=>{
+    if(!running) return;
+    resize();
+  });
+
+  resize();
+})();
+</script>
+
+</body>
+</html>
